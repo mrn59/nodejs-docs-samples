@@ -17,14 +17,14 @@
 'use strict';
 
 const main = (
-  projectId = process.env.GCLOUD_PROJECT,
+  projectId = process.env.GOOGLE_CLOUD_PROJECT,
   cloudRegion = 'us-central1',
   datasetId,
   hl7v2StoreId
 ) => {
   // [START healthcare_delete_hl7v2_store]
   const {google} = require('googleapis');
-  const healthcare = google.healthcare('v1beta1');
+  const healthcare = google.healthcare('v1');
 
   const deleteHl7v2Store = async () => {
     const auth = await google.auth.getClient({

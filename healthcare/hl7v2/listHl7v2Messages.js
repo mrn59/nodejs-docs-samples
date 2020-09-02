@@ -17,14 +17,14 @@
 'use strict';
 
 const main = (
-  projectId = process.env.GCLOUD_PROJECT,
+  projectId = process.env.GOOGLE_CLOUD_PROJECT,
   cloudRegion = 'us-central1',
   datasetId,
   hl7v2StoreId
 ) => {
   // [START healthcare_list_hl7v2_messages]
   const {google} = require('googleapis');
-  const healthcare = google.healthcare('v1beta1');
+  const healthcare = google.healthcare('v1');
 
   const listHl7v2Messages = async () => {
     const auth = await google.auth.getClient({

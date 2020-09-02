@@ -16,8 +16,14 @@
 
 set -eo pipefail
 
+_run_error_log() {
+  echo "error: line $(caller)"
+}
+
+trap '_run_error_log' ERR
+
 # Activate mocha config
-export MOCHA_REPORTER_OUTPUT=sponge_log.xml
+export MOCHA_REPORTER_OUTPUT=${PROJECT}_sponge_log.xml
 export MOCHA_REPORTER=xunit
 pushd github/nodejs-docs-samples
 mv .kokoro/.mocharc.js .
@@ -37,25 +43,28 @@ gcloud config set project $GOOGLE_CLOUD_PROJECT
 
 # Version is in the format <PR#>-<GIT COMMIT SHA>.
 # Ensures PR-based triggers of the same branch don't collide if Kokoro attempts
-# to run them concurrently.
-export SAMPLE_VERSION="${KOKORO_GIT_COMMIT:-latest}"
+# to run them concurrently. Defaults to 'latest'.
+RAW_SAMPLE_VERSION="${KOKORO_GIT_COMMIT:-latest}"
+export SAMPLE_VERSION="${RAW_SAMPLE_VERSION:0:15}"
 export SAMPLE_NAME="$(basename $(pwd))"
 
-# Builds not triggered by a PR will fall back to the commit hash then "latest".
-SUFFIX=${KOKORO_BUILD_ID}
+# Cloud Run has a max service name length, $KOKORO_BUILD_ID is too long to guarantee no conflict deploys.
+set -x
+export SUFFIX="$(cat /dev/urandom | LC_CTYPE=C tr -dc 'a-z0-9' | head -c 15)"
+set +x
 export SERVICE_NAME="${SAMPLE_NAME}-${SUFFIX}"
 export CONTAINER_IMAGE="gcr.io/${GOOGLE_CLOUD_PROJECT}/run-${SAMPLE_NAME}:${SAMPLE_VERSION}"
-
-# Register post-test cleanup.
-function cleanup {
-  gcloud --quiet container images delete "${CONTAINER_IMAGE}" || true
-}
-trap cleanup EXIT
 
 # Build the service
 set -x
 gcloud builds submit --tag="${CONTAINER_IMAGE}"
 set +x
+
+# Register post-test cleanup.
+function cleanup {
+  gcloud --quiet container images delete "${CONTAINER_IMAGE}" || true
+}
+trap cleanup EXIT HUP
 
 # Install dependencies and run Nodejs tests.
 export NODE_ENV=development
@@ -65,12 +74,14 @@ npm install
 # to open issues on failures:
 if [[ $KOKORO_BUILD_ARTIFACTS_SUBDIR = *"release"* ]]; then
 	export MOCHA_REPORTER_SUITENAME=${PROJECT}
-	cleanup() {
-	chmod +x $KOKORO_GFILE_DIR/linux_amd64/buildcop
-	$KOKORO_GFILE_DIR/linux_amd64/buildcop
+	notify_buildcop() {
+		# Call the original trap function.
+		cleanup
+		chmod +x $KOKORO_GFILE_DIR/linux_amd64/buildcop
+		$KOKORO_GFILE_DIR/linux_amd64/buildcop
 	}
-	trap cleanup EXIT HUP
+	trap notify_buildcop EXIT HUP
 fi
 
 npm test
-npm run --if-present e2e-test
+npm run --if-present system-test

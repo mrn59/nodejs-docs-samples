@@ -17,7 +17,7 @@
 'use strict';
 
 const main = (
-  projectId = process.env.GCLOUD_PROJECT,
+  projectId = process.env.GOOGLE_CLOUD_PROJECT,
   cloudRegion = 'us-central1',
   datasetId,
   hl7v2StoreId,
@@ -27,7 +27,7 @@ const main = (
 ) => {
   // [START healthcare_patch_hl7v2_message]
   const {google} = require('googleapis');
-  const healthcare = google.healthcare('v1beta1');
+  const healthcare = google.healthcare('v1');
 
   const patchHl7v2Message = async () => {
     const auth = await google.auth.getClient({

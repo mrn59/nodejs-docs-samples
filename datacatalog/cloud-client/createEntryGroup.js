@@ -23,12 +23,12 @@
  * For more information, see the README.md under /datacatalog and the
  * documentation at https://cloud.google.com/data-catalog/docs.
  */
-const main = async (projectId = process.env.GCLOUD_PROJECT, entryGroupId) => {
+const main = async (projectId = process.env.GOOGLE_CLOUD_PROJECT, entryGroupId) => {
   // [START datacatalog_create_entry_group_tag]
   // -------------------------------
   // Import required modules.
   // -------------------------------
-  const {DataCatalogClient} = require('@google-cloud/datacatalog').v1beta1;
+  const {DataCatalogClient} = require('@google-cloud/datacatalog').v1;
   const datacatalog = new DataCatalogClient();
 
   // Currently, Data Catalog stores metadata in the
