@@ -30,18 +30,19 @@ const outputBucket = firebaseConfigured
   ? functions.config().playchat.output_bucket
   : process.env.OUTPUT_BUCKET;
 const outputAudioEncoding = 'MP3';
-const voiceSsmlGender = 'NEUTRAL';
+const voiceSsmlGender = 'MALE';
+const speakingRate = 0.9;
 
 // Declare the API clients as global variables to allow them to initiaze at cold start.
-const {SpeechClient} = require('@google-cloud/speech');
-const {Translate} = require('@google-cloud/translate').v2;
-const {TextToSpeechClient} = require('@google-cloud/text-to-speech');
-const {Storage} = require('@google-cloud/storage');
+const { SpeechClient } = require('@google-cloud/speech');
+const { Translate } = require('@google-cloud/translate').v2;
+const { TextToSpeechClient } = require('@google-cloud/text-to-speech');
+const { Storage } = require('@google-cloud/storage');
 
 const speechToTextClient = new SpeechClient();
-const textTranslationClient = new Translate({projectId: googleCloudProject});
+const textTranslationClient = new Translate({ projectId: googleCloudProject });
 const textToSpeechClient = new TextToSpeechClient();
-const storageClient = new Storage({projectId: googleCloudProject});
+const storageClient = new Storage({ projectId: googleCloudProject });
 
 exports.speechTranslate = functions.https.onRequest(
   async (request, response) => {
@@ -55,45 +56,70 @@ exports.speechTranslate = functions.https.onRequest(
       const inputLanguageCode = request.body.languageCode;
       const inputAudioContent = request.body.audioContent;
 
+      const inputVoiceSsmlGender = voiceSsmlGender;
+
+
       console.log(`Input encoding: ${inputEncoding}`);
       console.log(`Input sample rate hertz: ${inputSampleRateHertz}`);
       console.log(`Input language code: ${inputLanguageCode}`);
 
-      // [START chain_cloud_calls]
-      const [sttResponse] = await callSpeechToText(
-        inputAudioContent,
-        inputEncoding,
-        inputSampleRateHertz,
-        inputLanguageCode
-      );
+      console.log(`Default voice gender: ${inputVoiceSsmlGender}`);
 
+      // [START chain_cloud_calls]
+      /* const [sttResponse] = await callSpeechToText(
+         inputAudioContent,
+         inputEncoding,
+         inputSampleRateHertz,
+         inputLanguageCode
+       ); */
+
+      console.log(`Response from callSpeachToText: ${inputAudioContent}.`);
       // The data object contains one or more recognition
       // alternatives ordered by accuracy.
-      const transcription = sttResponse.results
-        .map((result) => result.alternatives[0].transcript)
-        .join('\n');
+      /*  const transcription = sttResponse.results
+          .map((result) => result.alternatives[0].transcript)
+          .join('\n'); */
+      const transcription = inputAudioContent;
       responseBody.transcription = transcription;
       responseBody.gcsBucket = outputBucket;
 
       const translations = [];
       supportedLanguageCodes.forEach(async (languageCode) => {
-        const translation = {languageCode: languageCode};
+        const translation = { languageCode: languageCode };
         const outputFilename =
           request.body.outputFilename ||
           `${uuid.v4()}.${outputAudioEncoding.toLowerCase()}`;
 
         try {
+          //try{
           const [textTranslation] = await callTextTranslation(
             languageCode,
             transcription
           );
           translation.text = textTranslation;
+          const mText = translation.text;
+          console.log(`Response from callTextTranslation: ${textTranslation}.`);
+          console.log(`Response from callTextTranslation Text: ${mText}.`);
+          //}catch(error){
+          // console.error(`callTextTranslation error in ${languageCode}: ${error}`);
+          //response.status(400).send(`callTextTranslation error $languageCode $transcription`);
+          //}
 
-          const [{audioContent}] = await callTextToSpeech(
+
+
+          //try{
+          const [{ audioContent }] = await callTextToSpeech(
             languageCode,
-            textTranslation
+            textTranslation,
+            inputVoiceSsmlGender
           );
           const path = `${languageCode}/${outputFilename}`;
+          console.log(`Response from callTextToSpeech: ${path}.`);
+          /* }catch(error){
+             console.error(`callTextToSpeech error in ${languageCode}: ${error}`);
+             response.status(400).send(`callTextToSpeech error $languageCode $textTranslation`);
+           }*/
+
 
           console.log('zzx', audioContent);
 
@@ -101,6 +127,7 @@ exports.speechTranslate = functions.https.onRequest(
 
           console.log(`Successfully translated input to ${languageCode}.`);
           translation.gcsPath = path;
+          translation.base64Data = audioContent;
           translations.push(translation);
           if (translations.length === supportedLanguageCodes.length) {
             responseBody.translations = translations;
@@ -128,6 +155,121 @@ exports.speechTranslate = functions.https.onRequest(
   }
 );
 
+exports.speechTranslateNew = functions.https.onRequest(
+  async (request, response) => {
+    const responseBody = {};
+
+    try {
+      await validateRequest(request);
+
+      const inputEncoding = request.body.encoding;
+      const inputSampleRateHertz = request.body.sampleRateHertz;
+      const inputLanguageCode = request.body.languageCode;
+      const inputAudioContent = request.body.audioContent;
+      const inputVoiceSsmlGender = request.body.voiceGender;
+
+      console.log(`Input encoding: ${inputEncoding}`);
+      console.log(`Input sample rate hertz: ${inputSampleRateHertz}`);
+      console.log(`Input language code: ${inputLanguageCode}`);
+      console.log(`Input voice gender: ${inputVoiceSsmlGender}`);
+
+      // [START chain_cloud_calls]
+      /* const [sttResponse] = await callSpeechToText(
+         inputAudioContent,
+         inputEncoding,
+         inputSampleRateHertz,
+         inputLanguageCode
+       ); */
+
+      console.log(`Response from callSpeachToText: ${inputAudioContent}.`);
+      // The data object contains one or more recognition
+      // alternatives ordered by accuracy.
+      /*  const transcription = sttResponse.results
+          .map((result) => result.alternatives[0].transcript)
+          .join('\n'); */
+      const transcription = inputAudioContent;
+      responseBody.transcription = transcription;
+      responseBody.gcsBucket = outputBucket;
+
+      const translations = [];
+      const base64Contents = [];
+      supportedLanguageCodes.forEach(async (languageCode) => {
+        const translation = { languageCode: languageCode };
+        const outputFilename =
+          request.body.outputFilename ||
+          `${uuid.v4()}.${outputAudioEncoding.toLowerCase()}`;
+
+        try {
+          //try{
+          const [textTranslation] = await callTextTranslation(
+            languageCode,
+            transcription
+          );
+          translation.text = textTranslation;
+          const mText = translation.text;
+          console.log(`Response from callTextTranslation: ${textTranslation}.`);
+          console.log(`Response from callTextTranslation Text: ${mText}.`);
+          //}catch(error){
+          // console.error(`callTextTranslation error in ${languageCode}: ${error}`);
+          //response.status(400).send(`callTextTranslation error $languageCode $transcription`);
+          //}
+
+
+
+          //try{
+          const [{ audioContent }] = await callTextToSpeech(
+            languageCode,
+            textTranslation,
+            inputVoiceSsmlGender
+          );
+          const path = `${languageCode}/${outputFilename}`;
+          console.log(`Response from callTextToSpeech: ${path}.`);
+          /* }catch(error){
+             console.error(`callTextToSpeech error in ${languageCode}: ${error}`);
+             response.status(400).send(`callTextToSpeech error $languageCode $textTranslation`);
+           }*/
+
+
+          console.log('zzx', audioContent);
+
+         // await uploadToCloudStorage(path, audioContent);
+
+          console.log(`Successfully translated input to ${languageCode}.`);
+          translation.gcsPath = path;
+          translation.base64Data = audioContent;
+          translations.push(translation);
+
+          if (translations.length === supportedLanguageCodes.length) {
+            responseBody.translations = translations;
+            console.log(`Response: ${JSON.stringify(responseBody)}`);
+            response.status(200).send(responseBody);
+          }
+        } catch (error) {
+          console.error(
+            `Partial error in translation to ${languageCode}: ${error}`
+          );
+
+          translation.error = error.message;
+          translations.push(translation);
+
+
+          if (translations.length === supportedLanguageCodes.length) {
+            responseBody.translations = translations;
+            console.log(`Response: ${JSON.stringify(responseBody)}`);
+            response.status(200).send(responseBody);
+          }
+        }
+      });
+      // [END chain_cloud_calls]
+    } catch (error) {
+      console.error(error);
+      response.status(400).send(error.message);
+    }
+  }
+);
+
+
+
 // [START call_speech_to_text]
 const callSpeechToText = (
   audioContent,
@@ -143,7 +285,7 @@ const callSpeechToText = (
       sampleRateHertz: sampleRateHertz,
       languageCode: languageCode,
     },
-    audio: {content: audioContent},
+    audio: { content: audioContent },
   };
 
   return speechToTextClient.recognize(request);
@@ -159,13 +301,13 @@ const callTextTranslation = (targetLangCode, data) => {
 // [END call_text_translation]
 
 // [START call_text_to_speech]
-const callTextToSpeech = (targetLocale, data) => {
+const callTextToSpeech = (targetLocale, data, voiceGender) => {
   console.log(`Converting to speech in ${targetLocale}: ${data}`);
 
   const request = {
-    input: {text: data},
-    voice: {languageCode: targetLocale, ssmlGender: voiceSsmlGender},
-    audioConfig: {audioEncoding: outputAudioEncoding},
+    input: { text: data },
+    voice: { languageCode: targetLocale, ssmlGender: voiceGender },
+    audioConfig: { audioEncoding: outputAudioEncoding, speakingRate: speakingRate },
   };
 
   return textToSpeechClient.synthesizeSpeech(request);
